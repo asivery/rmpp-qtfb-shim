@@ -73,6 +73,7 @@ int fbShimIoctl(int fd, unsigned long request, char *ptr) {
         } else if (request == MXCFB_SET_AUTO_UPDATE_MODE) {
             return 0;
         } else if (request == MXCFB_WAIT_FOR_UPDATE_COMPLETE) {
+            // TODO ??
             return 0;
         }
         else if (request == FBIOGET_VSCREENINFO) {
