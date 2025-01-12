@@ -7,6 +7,9 @@
 #include <asm/ioctl.h>
 #include <linux/input-event-codes.h>
 #include <linux/input.h>
+
+#define BIT(x) (1 << x)
+
 #define REAL_TOUCHSCREEN "/dev/input/event3"
 #define REAL_DIGITIZER "/dev/input/event2"
 
@@ -22,9 +25,6 @@
 #define RM2_MAX_TOUCH_X 20967
 #define RM2_MAX_TOUCH_Y 15725
 #define RM2_MAX_PRESSURE 4095
-#define RM2_MAX_TOOLTYPE 1
-#define RM2_MAX_SLOT     31
-#define RM2_MAX_TRACKID  65535 
 
 #define RM2_MAX_TOUCH_MAJOR 255
 #define RM2_MAX_TOUCH_MINOR 255
@@ -86,17 +86,17 @@ static int fakeOrOverrideAbsInfo(
 {
     int status = realIoctl(fd, request, ptr);
     if (status == -1) {
-        struct input_absinfo fake = {0};
-        fake.value = 0;
-        fake.minimum = minVal;
-        fake.maximum = maxVal;
-        fake.fuzz    = fuzzVal;
-        fake.flat    = flatVal;
-        fake.resolution = resolutionVal;
-        std::memcpy(ptr, &fake, sizeof(fake));
+        struct input_absinfo *fake = reinterpret_cast<struct input_absinfo*>(ptr);
+        std::memset(fake, 0, sizeof(fake));
+        fake->value   = 0;
+        fake->minimum = minVal;
+        fake->maximum = maxVal;
+        fake->fuzz    = fuzzVal;
+        fake->flat    = flatVal;
+        fake->resolution = resolutionVal;
         return 0;
     } else {
-        struct input_absinfo *absinfo = (struct input_absinfo *) ptr;
+        struct input_absinfo *absinfo = reinterpret_cast<struct input_absinfo*>(ptr);
         absinfo->minimum    = minVal;
         absinfo->maximum    = maxVal;
         absinfo->fuzz       = fuzzVal;
@@ -104,6 +104,10 @@ static int fakeOrOverrideAbsInfo(
         absinfo->resolution = resolutionVal;
         return 0;
     }
+}
+
+inline void setBit(unsigned long *bits, int code) {
+    bits[code / (8 * sizeof(long))] |= (1UL << (code % (8 * sizeof(long))));
 }
 
 #define IS_MATCHING_IOCTL(dir, type, nr) ((request & ~(_IOC_SIZEMASK << _IOC_SIZESHIFT)) == (_IOC(dir, type, nr, 0)))
@@ -127,52 +131,21 @@ int inputShimIoctl(int fd, unsigned long request, char *ptr, int (*realIoctl)(in
                                         0, RM2_MAX_TOUCH_Y,
                                         100, 0, 0);
         }
-        if (IS_MATCHING_IOCTL_S(_IOC_READ, 'E', 0x40 + ABS_MT_PRESSURE, sizeof(input_absinfo))) {
-            return fakeOrOverrideAbsInfo(fd, request, ptr, realIoctl,
-                                        0, RM2_MAX_PRESSURE,
-                                        0, 0, 0);
-        }
-        if (IS_MATCHING_IOCTL_S(_IOC_READ, 'E', 0x40 + ABS_MT_TOUCH_MAJOR, sizeof(input_absinfo))) {
-            return fakeOrOverrideAbsInfo(fd, request, ptr, realIoctl,
-                                        0, RM2_MAX_TOUCH_MAJOR,
-                                        0, 0, 0);
-        }
-        if (IS_MATCHING_IOCTL_S(_IOC_READ, 'E', 0x40 + ABS_MT_TOUCH_MINOR, sizeof(input_absinfo))) {
-            return fakeOrOverrideAbsInfo(fd, request, ptr, realIoctl,
-                                        0, RM2_MAX_TOUCH_MINOR,
-                                        0, 0, 0);
-        }
         if (IS_MATCHING_IOCTL_S(_IOC_READ, 'E', 0x40 + ABS_MT_ORIENTATION, sizeof(input_absinfo))) {
             int status = realIoctl(fd, request, ptr);
             if (status < 0) {
-                struct input_absinfo fake;
-                std::memset(&fake, 0, sizeof(fake));
-                fake.minimum = RM2_MIN_ORIENTATION;
-                fake.maximum = RM2_MAX_ORIENTATION;
-                std::memcpy(ptr, &fake, sizeof(fake));
+                struct input_absinfo *fake = reinterpret_cast<struct input_absinfo*>(ptr);
+                std::memset(fake, 0, sizeof(fake));
+                fake->minimum = RM2_MIN_ORIENTATION;
+                fake->maximum = RM2_MAX_ORIENTATION;
                 return 0;
             } else {
                 // override
-                struct input_absinfo *absinfo = (struct input_absinfo*) ptr;
+                struct input_absinfo *absinfo = reinterpret_cast<struct input_absinfo*>(ptr);
                 absinfo->minimum = RM2_MIN_ORIENTATION;
                 absinfo->maximum = RM2_MAX_ORIENTATION;
                 return 0;
             }
-        }
-        if (IS_MATCHING_IOCTL_S(_IOC_READ, 'E', 0x40 + ABS_MT_SLOT, sizeof(input_absinfo))) {
-            return fakeOrOverrideAbsInfo(fd, request, ptr, realIoctl,
-                                        0, RM2_MAX_SLOT,
-                                        0, 0, 0);
-        }
-        if (IS_MATCHING_IOCTL_S(_IOC_READ, 'E', 0x40 + ABS_MT_TOOL_TYPE, sizeof(input_absinfo))) {
-            return fakeOrOverrideAbsInfo(fd, request, ptr, realIoctl,
-                                        0, RM2_MAX_TOOLTYPE,
-                                        0, 0, 0);
-        }
-        if (IS_MATCHING_IOCTL_S(_IOC_READ, 'E', 0x40 + ABS_MT_TRACKING_ID, sizeof(input_absinfo))) {
-            return fakeOrOverrideAbsInfo(fd, request, ptr, realIoctl,
-                                        0, RM2_MAX_TRACKID,
-                                        0, 0, 0);
         }
 
         unsigned cmdDir  = _IOC_DIR(request);
@@ -187,19 +160,15 @@ int inputShimIoctl(int fd, unsigned long request, char *ptr, int (*realIoctl)(in
 
             unsigned long *bits = (unsigned long*) ptr;
 
-            auto setBit = [&](int code) {
-                bits[code / (8*sizeof(long))] |= (1UL << (code % (8*sizeof(long))));
-            };
-
-            setBit(ABS_MT_POSITION_X);
-            setBit(ABS_MT_POSITION_Y);
-            setBit(ABS_MT_PRESSURE);
-            setBit(ABS_MT_TOUCH_MAJOR);
-            setBit(ABS_MT_TOUCH_MINOR);
-            setBit(ABS_MT_ORIENTATION);
-            setBit(ABS_MT_SLOT);
-            setBit(ABS_MT_TOOL_TYPE);
-            setBit(ABS_MT_TRACKING_ID);
+            setBit(bits, ABS_MT_POSITION_X);
+            setBit(bits, ABS_MT_POSITION_Y);
+            setBit(bits, ABS_MT_PRESSURE);
+            setBit(bits, ABS_MT_TOUCH_MAJOR);
+            setBit(bits, ABS_MT_TOUCH_MINOR);
+            setBit(bits, ABS_MT_ORIENTATION);
+            setBit(bits, ABS_MT_SLOT);
+            setBit(bits, ABS_MT_TOOL_TYPE);
+            setBit(bits, ABS_MT_TRACKING_ID);
 
             return 0;
         }
