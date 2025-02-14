@@ -14,15 +14,9 @@
 #define BYTES_PER_PIXEL 2
 #define FILE_FB "/dev/fb0"
 
-#ifdef FULL_RM2
-#define SHIM_WIDTH RM2_WIDTH
-#define SHIM_HEIGHT RM2_HEIGHT
+#define SHIM_WIDTH RM1_WIDTH
+#define SHIM_HEIGHT RM1_HEIGHT
 #define FB_PROTOCOL FBFMT_RM2FB
-#else
-#define SHIM_WIDTH RMPP_WIDTH
-#define SHIM_HEIGHT RMPP_HEIGHT
-#define FB_PROTOCOL FBFMT_RMPP_RGB565
-#endif
 
 #ifdef _32BITFIXEDINFO
 struct _32_bit_fb_fix_screeninfo {
@@ -47,11 +41,16 @@ struct _32_bit_fb_fix_screeninfo {
 #define remapped_fb_var_screeninfo fb_fix_screeninfo
 #endif
 
-static qtfb::ClientConnection clientConnection(QTFB_DEFAULT_FRAMEBUFFER, FB_PROTOCOL);
-static void *shmMemory = clientConnection.shm;
-static int shmFD = clientConnection.shmFd;
+static qtfb::ClientConnection *clientConnection;
+static void *shmMemory = NULL;
+static int shmFD = -1;
 
 int fbShimOpen(const char *file) {
+    if(shmFD == -1 && strcmp(file, FILE_FB) == 0) {
+        clientConnection = new qtfb::ClientConnection(QTFB_DEFAULT_FRAMEBUFFER, FB_PROTOCOL);
+        shmFD = clientConnection->shmFd;
+        shmMemory = clientConnection->shm;
+    }
     return strcmp(file, FILE_FB) == 0 ? shmFD : INTERNAL_SHIM_NOT_APPLICABLE; 
 }
 
@@ -63,7 +62,7 @@ int fbShimIoctl(int fd, unsigned long request, char *ptr) {
     if (fd == shmFD) {
         if (request == MXCFB_SEND_UPDATE) {
             mxcfb_update_data *update = (mxcfb_update_data *) ptr;
-            clientConnection.sendPartialUpdate(
+            clientConnection->sendPartialUpdate(
                 update->update_region.left,
                 update->update_region.top,
                 update->update_region.width,
@@ -97,7 +96,7 @@ int fbShimIoctl(int fd, unsigned long request, char *ptr) {
             return 0;
         } else if (request == FBIOGET_FSCREENINFO) {
             remapped_fb_var_screeninfo *screeninfo = (remapped_fb_var_screeninfo *)ptr;
-            screeninfo->smem_len = clientConnection.shmSize;
+            screeninfo->smem_len = clientConnection->shmSize;
             screeninfo->smem_start = (unsigned long) shmMemory;
             screeninfo->line_length = SHIM_WIDTH * BYTES_PER_PIXEL;
             constexpr char fb_id[] = "mxcfb";

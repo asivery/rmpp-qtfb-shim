@@ -28,8 +28,8 @@ int spoofModelFD() {
     return modelSpoofFD;
 }
 
-static int (*realOpen)(const char *, int, int) = (int (*)(const char *, int, int)) dlsym(RTLD_NEXT, "open");
-inline int handleOpen(const char *fileName) {
+static int (*realOpen)(const char *, int, mode_t) = (int (*)(const char *, int, mode_t)) dlsym(RTLD_NEXT, "open");
+inline int handleOpen(const char *fileName, int flags, mode_t mode) {
     if(strcmp(fileName, FILE_MODEL) == 0) {
         return spoofModelFD();
     }
@@ -39,7 +39,7 @@ inline int handleOpen(const char *fileName) {
         return status;
     }
 
-    if((status = inputShimOpen(fileName, realOpen)) != INTERNAL_SHIM_NOT_APPLICABLE) {
+    if((status = inputShimOpen(fileName, realOpen, flags, mode)) != INTERNAL_SHIM_NOT_APPLICABLE) {
         return status;
     }
 
@@ -77,7 +77,7 @@ extern "C" int ioctl(int fd, unsigned long request, char *ptr) {
 extern "C" int open64(const char *fileName, int flags, mode_t mode) {
     static int (*realOpen64)(const char *, int, mode_t) = (int (*)(const char *, int, mode_t)) dlsym(RTLD_NEXT, "open64");
     int fd;
-    if((fd = handleOpen(fileName)) != INTERNAL_SHIM_NOT_APPLICABLE) {
+    if((fd = handleOpen(fileName, flags, mode)) != INTERNAL_SHIM_NOT_APPLICABLE) {
         return fd;
     }
 
@@ -87,7 +87,7 @@ extern "C" int open64(const char *fileName, int flags, mode_t mode) {
 extern "C" int openat(int dirfd, const char *fileName, int flags, mode_t mode) {
     static int (*realOpenat)(int, const char *, int, mode_t) = (int (*)(int, const char *, int, mode_t)) dlsym(RTLD_NEXT, "openat");
     int fd;
-    if((fd = handleOpen(fileName)) != INTERNAL_SHIM_NOT_APPLICABLE) {
+    if((fd = handleOpen(fileName, flags, mode)) != INTERNAL_SHIM_NOT_APPLICABLE) {
         return fd;
     }
 
@@ -96,7 +96,7 @@ extern "C" int openat(int dirfd, const char *fileName, int flags, mode_t mode) {
 
 extern "C" int open(const char *fileName, int flags, mode_t mode) {
     int fd;
-    if((fd = handleOpen(fileName)) != INTERNAL_SHIM_NOT_APPLICABLE) {
+    if((fd = handleOpen(fileName, flags, mode)) != INTERNAL_SHIM_NOT_APPLICABLE) {
         return fd;
     }
 
@@ -106,7 +106,7 @@ extern "C" int open(const char *fileName, int flags, mode_t mode) {
 extern "C" FILE *fopen(const char *fileName, const char *mode) {
     static FILE *(*realFopen)(const char *, const char *) = (FILE *(*)(const char *, const char *)) dlsym(RTLD_NEXT, "fopen");
     int fd;
-    if((fd = handleOpen(fileName)) != INTERNAL_SHIM_NOT_APPLICABLE) {
+    if((fd = handleOpen(fileName, 0, 0)) != INTERNAL_SHIM_NOT_APPLICABLE) {
         return fdopen(fd, mode);
     }
 
@@ -116,7 +116,7 @@ extern "C" FILE *fopen(const char *fileName, const char *mode) {
 extern "C" FILE *fopen64(const char *fileName, const char *mode) {
     static FILE *(*realFopen)(const char *, const char *) = (FILE *(*)(const char *, const char *)) dlsym(RTLD_NEXT, "fopen64");
     int fd;
-    if((fd = handleOpen(fileName)) != INTERNAL_SHIM_NOT_APPLICABLE) {
+    if((fd = handleOpen(fileName, 0, 0)) != INTERNAL_SHIM_NOT_APPLICABLE) {
         return fdopen(fd, mode);
     }
 
