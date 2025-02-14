@@ -5,8 +5,8 @@
 #define SOCKET_PATH "/tmp/qtfb.sock"
 #define FORMAT_SHM(var, key) char var[20]; snprintf(var, 20, "/qtfb_%d", key)
 
-#define RM2_WIDTH 1404
-#define RM2_HEIGHT 1872
+#define RM1_WIDTH 1404
+#define RM1_HEIGHT 1872
 #define RMPP_WIDTH 1620
 #define RMPP_HEIGHT 2160
 
