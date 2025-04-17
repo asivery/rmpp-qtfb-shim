@@ -14,9 +14,8 @@
 #define BYTES_PER_PIXEL 2
 #define FILE_FB "/dev/fb0"
 
-#define SHIM_WIDTH RM1_WIDTH
-#define SHIM_HEIGHT RM1_HEIGHT
-#define FB_PROTOCOL FBFMT_RM2FB
+#define SHIM_WIDTH RMPP_WIDTH
+#define SHIM_HEIGHT RMPP_HEIGHT
 
 #ifdef _32BITFIXEDINFO
 struct _32_bit_fb_fix_screeninfo {
@@ -41,13 +40,16 @@ struct _32_bit_fb_fix_screeninfo {
 #define remapped_fb_var_screeninfo fb_fix_screeninfo
 #endif
 
+extern qtfb::FBKey shimFramebufferKey;
+extern uint8_t shimType;
+
 static qtfb::ClientConnection *clientConnection;
 static void *shmMemory = NULL;
 static int shmFD = -1;
 
 int fbShimOpen(const char *file) {
     if(shmFD == -1 && strcmp(file, FILE_FB) == 0) {
-        clientConnection = new qtfb::ClientConnection(QTFB_DEFAULT_FRAMEBUFFER, FB_PROTOCOL);
+        clientConnection = new qtfb::ClientConnection(shimFramebufferKey, shimType);
         shmFD = clientConnection->shmFd;
         shmMemory = clientConnection->shm;
     }
