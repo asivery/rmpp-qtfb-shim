@@ -14,8 +14,8 @@
 #define BYTES_PER_PIXEL 2
 #define FILE_FB "/dev/fb0"
 
-#define SHIM_WIDTH RMPP_WIDTH
-#define SHIM_HEIGHT RMPP_HEIGHT
+#define SHIM_WIDTH (shimType == FBFMT_RM2FB ? RM1_WIDTH : RMPP_WIDTH)
+#define SHIM_HEIGHT (shimType == FBFMT_RM2FB ? RM1_HEIGHT : RMPP_HEIGHT)
 
 #ifdef _32BITFIXEDINFO
 struct _32_bit_fb_fix_screeninfo {
